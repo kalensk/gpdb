@@ -596,7 +596,14 @@ class GpRecoverSegmentProgram:
         # Acceptable state is:
         #    - No segments down
         #    - No segments in change tracking or unsynchronized state
+
+        ########################################################################
+        # Enter this if condition on rebalance
+        ########################################################################
         if self.__options.rebalanceSegments:
+            ########################################################################
+            # get_invalid_segdbs() checks if segments are down. (ie: valid == status)
+            ########################################################################
             if len(gpArray.get_invalid_segdbs()) > 0:
                 raise Exception("Down segments still exist.  All segments must be up to rebalance.")
             if len(gpArray.get_synchronized_segdbs()) != len(gpArray.getSegDbList()):
@@ -615,6 +622,9 @@ class GpRecoverSegmentProgram:
             # just output config file and done
             self.outputToFile(mirrorBuilder, gpArray, self.__options.outputSampleConfigFile)
             self.logger.info('Configuration file output to %s successfully.' % self.__options.outputSampleConfigFile)
+        ########################################################################
+        # Enter this block on rebalance
+        ########################################################################
         elif self.__options.rebalanceSegments:
             assert (isinstance(mirrorBuilder, GpSegmentRebalanceOperation))
 
@@ -630,6 +640,10 @@ class GpRecoverSegmentProgram:
                     if not userinput.ask_yesno(None, "\nContinue with segment rebalance procedure", 'N'):
                         raise UserAbortedException()
 
+                ########################################################################
+                # Main work for rebalance.
+                # NOTE: a separate thread appears to be spawned here and main execution repeats from the top for a recover operation
+                ########################################################################
                 fullRebalanceDone = mirrorBuilder.rebalance()
                 self.logger.info("******************************************************************")
                 if fullRebalanceDone:
@@ -645,6 +659,9 @@ class GpRecoverSegmentProgram:
         elif len(mirrorBuilder.getMirrorsToBuild()) == 0:
             self.logger.info('No segments to recover')
         else:
+            ########################################################################
+            # This block is for recovery (not rebalancing)
+            ########################################################################
             mirrorBuilder.checkForPortAndDirectoryConflicts(gpArray)
             self.validate_heap_checksum_consistency(gpArray, mirrorBuilder)
 
@@ -662,6 +679,9 @@ class GpRecoverSegmentProgram:
                 self.syncPackages(new_hosts)
 
             config_primaries_for_replication(gpArray, self.__options.hba_hostnames)
+            ########################################################################
+            # Main work for recovery
+            ########################################################################
             if not mirrorBuilder.buildMirrors("recover", gpEnv, gpArray):
                 sys.exit(1)
 
@@ -673,6 +693,10 @@ class GpRecoverSegmentProgram:
             self.logger.info("Use  gpstate -s  to check the streaming progress.")
             self.logger.info("******************************************************************")
 
+        ########################################################################
+        # During a rebalance a thread is spawned and recovery proceeds to here.
+        # Execution then returns back to rebalanceSegments.py:90 on cmd.run()
+        ########################################################################
         sys.exit(0)
 
     def trigger_fts_probe(self, port=0):

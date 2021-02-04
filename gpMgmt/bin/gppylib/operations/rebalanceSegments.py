@@ -35,6 +35,9 @@ class GpSegmentRebalanceOperation:
         # Get the unbalanced primary segments grouped by hostname
         # These segments are what we will shutdown.
         self.logger.info("Getting unbalanced segments")
+        ########################################################################
+        # get_unbalanced_primary_segdbs() Gets the primary segments for content pairs that are swapped.
+        ########################################################################
         unbalanced_primary_segs = GpArray.getSegmentsByHostName(self.gpArray.get_unbalanced_primary_segdbs())
         pool = base.WorkerPool()
 
