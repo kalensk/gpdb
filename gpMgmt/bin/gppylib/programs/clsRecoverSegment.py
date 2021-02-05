@@ -596,19 +596,18 @@ class GpRecoverSegmentProgram:
         # Acceptable state is:
         #    - No segments down
         #    - No segments in change tracking or unsynchronized state
-
         ########################################################################
         # Enter this if condition on rebalance
         ########################################################################
-        if self.__options.rebalanceSegments:
-            ########################################################################
-            # get_invalid_segdbs() checks if segments are down. (ie: valid == status)
-            ########################################################################
-            if len(gpArray.get_invalid_segdbs()) > 0:
-                raise Exception("Down segments still exist.  All segments must be up to rebalance.")
-            if len(gpArray.get_synchronized_segdbs()) != len(gpArray.getSegDbList()):
-                raise Exception(
-                    "Some segments are not yet synchronized.  All segments must be synchronized to rebalance.")
+        # if self.__options.rebalanceSegments:
+        #     ########################################################################
+        #     # get_invalid_segdbs() checks if segments are down. (ie: valid == status)
+        #     ########################################################################
+        #     if len(gpArray.get_invalid_segdbs()) > 0:
+        #         raise Exception("Down segments still exist.  All segments must be up to rebalance.")
+        #     if len(gpArray.get_synchronized_segdbs()) != len(gpArray.getSegDbList()):
+        #         raise Exception(
+        #             "Some segments are not yet synchronized.  All segments must be synchronized to rebalance.")
 
         # retain list of hosts that were existing in the system prior to getRecoverActions...
         # this will be needed for later calculations that determine whether

@@ -38,7 +38,19 @@ class GpSegmentRebalanceOperation:
         ########################################################################
         # get_unbalanced_primary_segdbs() Gets the primary segments for content pairs that are swapped.
         ########################################################################
-        unbalanced_primary_segs = GpArray.getSegmentsByHostName(self.gpArray.get_unbalanced_primary_segdbs())
+        unbalanced_primary_segs = []
+        for i, segmentPair in enumerate(self.gpArray.segmentPairs):
+                if segmentPair.primaryDB.preferred_role != segmentPair.primaryDB.role and \
+                    segmentPair.mirrorDB.preferred_role != segmentPair.mirrorDB.role:
+                    if segmentPair.mirrorDB.valid:
+                        unbalanced_primary_segs.append(segmentPair.primaryDB)
+                    else:
+                        self.logger.warning(
+                            "Not rebalancing primary segment dbid %d with its mirror dbid %d because the mirror is down" \
+                                       % (segmentPair.primaryDB.dbid, segmentPair.mirrorDB.dbid))
+
+
+        unbalanced_primary_segs = GpArray.getSegmentsByHostName(unbalanced_primary_segs)
         pool = base.WorkerPool()
 
         try:
