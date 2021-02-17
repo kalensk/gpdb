@@ -2,6 +2,8 @@
 ## Travis CI build script for Greenplum Database Open Source Project.
 ## ----------------------------------------------------------------------
 
+# blank line
+
 language: cpp
 cache: ccache
 
