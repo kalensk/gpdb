@@ -359,7 +359,7 @@ class GpMirrorListToBuild:
         """
 
         # Run pg_rewind on all the targets
-        cmds = []
+        rewind_cmds = []
         progressCmds = []
         removeCmds= []
         for rewindSeg in rewindInfo.values():
@@ -386,37 +386,57 @@ class GpMirrorListToBuild:
             # Note the command name, we use the dbid later to
             # correlate the command results with GpMirrorToBuild
             # object.
-            cmd = gp.SegmentRewind('rewind dbid: %s' %
-                                   rewindSeg.targetSegment.getSegmentDbId(),
-                                   rewindSeg.targetSegment.getSegmentHostName(),
-                                   rewindSeg.targetSegment.getSegmentDataDirectory(),
-                                   rewindSeg.sourceHostname,
-                                   rewindSeg.sourcePort,
-                                   rewindSeg.progressFile,
-                                   verbose=True)
+            rewind_cmd = gp.SegmentRewind('rewind dbid: %s' %
+                                          rewindSeg.targetSegment.getSegmentDbId(),
+                                          rewindSeg.targetSegment.getSegmentHostName(),
+                                          rewindSeg.targetSegment.getSegmentDataDirectory(),
+                                          rewindSeg.sourceHostname,
+                                          rewindSeg.sourcePort,
+                                          rewindSeg.progressFile,
+                                          verbose=True)
             progressCmd, removeCmd = self.__getProgressAndRemoveCmds(rewindSeg.progressFile,
                                                                      rewindSeg.targetSegment.getSegmentDbId(),
                                                                      rewindSeg.targetSegment.getSegmentHostName())
-            cmds.append(cmd)
+            rewind_cmds.append(rewind_cmd)
             removeCmds.append(removeCmd)
             if progressCmd:
                 progressCmds.append(progressCmd)
+        # Done creating commands
 
+        # Create additional pools
+        rewind_pool = base.WorkerPool(numWorkers=self.__parallelDegree, logger=self.__logger)
+        remove_pool = base.WorkerPool(numWorkers=self.__parallelDegree, logger=self.__logger)
 
-        completedCmds = self.__runWaitAndCheckWorkerPoolForErrorsAndClear(cmds, "rewinding segments",
-                                                          suppressErrorCheck=True,
-                                                          progressCmds=progressCmds)
+        # run rewind commands
+        for rewind_cmd in rewind_cmds:
+            rewind_pool.addCommand(rewind_cmd)
 
-        self.__runWaitAndCheckWorkerPoolForErrorsAndClear(removeCmds, "removing rewind progress logfiles",
-                                                          suppressErrorCheck=False)
+        # Run progress commands at same time as rewind commands
+        self._join_and_show_segment_progress(progressCmds, inplace=self.__progressMode == GpMirrorListToBuild.Progress.INPLACE)
 
+        # Wait for rewind commands and get completedCmds for later
+        base.join_and_indicate_progress(rewind_pool)
+        rewind_pool.check_results()
+        completedCmds = rewind_pool.getCompletedItems()
+        rewind_pool.haltWork()
+        rewind_pool.joinWorkers()
+
+        # Run Remove Commands
+        for remove_cmd in removeCmds:
+            remove_pool.addCommand(remove_cmd)
+        base.join_and_indicate_progress(remove_pool)
+        remove_pool.check_results()
+        remove_pool.haltWork()
+        remove_pool.joinWorkers()
+
+        # Check rewind commands
         rewindFailedSegments = []
-        for cmd in completedCmds:
-            self.__logger.debug('pg_rewind results: %s' % cmd.results)
-            if not cmd.was_successful():
-                dbid = int(cmd.name.split(':')[1].strip())
-                self.__logger.debug("%s failed" % cmd.name)
-                self.__logger.warning(cmd.get_stdout())
+        for rewind_cmd in completedCmds:
+            self.__logger.debug('pg_rewind results: %s' % rewind_cmd.results)
+            if not rewind_cmd.was_successful():
+                dbid = int(rewind_cmd.name.split(':')[1].strip())
+                self.__logger.debug("%s failed" % rewind_cmd.name)
+                self.__logger.warning(rewind_cmd.get_stdout())
                 self.__logger.warning("Incremental recovery failed for dbid %d. You must use gprecoverseg -F to recover the segment." % dbid)
                 rewindFailedSegments.append(rewindInfo[dbid].targetSegment)
 
